@@ -134,3 +134,57 @@ Esse endpoint V3 nao exige login nem API key, mas ele e um servico publico do ec
 - `subtitle_app/adb_client.py`: leitura e envio de arquivos Android via ADB.
 - `subtitle_app/cli.py`: interface de linha de comando.
 - `subtitle_app/gui.py`: interface grafica Tkinter.
+
+## Versao Web
+
+A versao web segue a organizacao descrita em `ARQUITETURA.md`:
+
+```text
+backend/
+  api/routes/
+  application/
+  domain/entities/
+  infrastructure/
+  static/
+  tests/
+frontend/
+  src/app/
+  src/components/
+  src/lib/data/
+  src/lib/domain/
+  src/lib/services/
+  src/routes/
+  src/styles/
+  src/types/
+```
+
+O pacote `subtitle_app/` continua sendo o core compartilhado pelo CLI, app Tkinter e backend Flask.
+
+### Rodar Backend
+
+```powershell
+cd C:\Repos\SubtitleDownloader\backend
+pip install -r requirements.txt
+python app.py
+```
+
+API: `http://127.0.0.1:5000/api`
+
+Docs: `http://127.0.0.1:5000/docs`
+
+### Rodar Frontend
+
+```powershell
+cd C:\Repos\SubtitleDownloader\frontend
+npm install
+npm run dev
+```
+
+Web app: `http://127.0.0.1:5173`
+
+Se usar outra URL de API:
+
+```powershell
+$env:VITE_API_LOCAL_BASE_URL="http://127.0.0.1:5000/api"
+npm run dev
+```

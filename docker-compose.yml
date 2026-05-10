@@ -1,0 +1,24 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: dockerfile
+    ports:
+      - "7001:5000"
+    volumes:
+      - ./:/app
+    working_dir: /app/backend
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: dockerfile
+    ports:
+      - "7002:5173"
+    environment:
+      - VITE_API_LOCAL_BASE_URL=http://localhost:7001/api
+    volumes:
+      - ./frontend:/app/frontend
+    working_dir: /app/frontend
+    depends_on:
+      - backend
