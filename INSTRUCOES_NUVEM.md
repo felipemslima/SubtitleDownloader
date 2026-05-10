@@ -288,6 +288,32 @@ sudo ufw allow 443/tcp
 
 Se voce for testar sem dominio e sem Nginx, tambem pode liberar portas temporarias como `5173` e `5000`, mas para producao prefira expor apenas `80/443`.
 
+## Instalacao Como App no Chrome Android
+
+O frontend e um PWA. No Chrome Android, ele pode aparecer com a opcao **Instalar app** quando:
+
+- o site esta em HTTPS, ou em `localhost` durante desenvolvimento;
+- o arquivo `manifest.webmanifest` esta acessivel;
+- o `sw.js` esta acessivel na raiz do site;
+- os icones em `/icons/` carregam corretamente;
+- o app foi aberto pelo menos uma vez no Chrome.
+
+Em producao, configure HTTPS com Certbot. Sem HTTPS, o Chrome normalmente nao mostra a opcao de instalacao em Android.
+
+Depois do deploy, teste:
+
+```bash
+curl -I https://legendas.seudominio.com/manifest.webmanifest
+curl -I https://legendas.seudominio.com/sw.js
+curl -I https://legendas.seudominio.com/icons/icon-192.png
+```
+
+No Android, abra o site no Chrome e procure:
+
+```text
+Menu de tres pontos -> Instalar app
+```
+
 ## Deploy Sem Docker
 
 ### 1. Instalar pacotes do sistema
