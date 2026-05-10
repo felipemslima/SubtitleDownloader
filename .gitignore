@@ -1,4 +1,10 @@
 __pycache__/
+.env
+.env.local
+node_modules/
+dist/
+build/
+*.tsbuildinfo
 downloads/
 downloads_test/
 downloads_test_*/
