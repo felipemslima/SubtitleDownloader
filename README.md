@@ -1,190 +1,93 @@
 # Subtitle Downloader
 
-Aplicativo em Python para buscar legendas de episodios de series no OpenSubtitles V3 usado pelo Stremio.
+**Fetch subtitles for an entire TV season and drop each one next to its video file, renamed to match.** Works with folders on your PC or directly on an Android device over ADB.
 
-Ele:
+<!-- TODO: add a screenshot of the GUI and of the web app -->
 
-- busca a serie no TVMaze para descobrir o IMDb id;
-- consulta `https://opensubtitles-v3.strem.io`;
-- baixa um episodio pelo CLI;
-- baixa uma temporada inteira pela interface grafica;
-- associa legendas aos arquivos de video da pasta destino e copia a legenda com o mesmo nome do video;
-- suporta pasta local do Windows ou pasta Android via ADB.
+One core library, three front-ends: a **CLI**, a **desktop GUI** (Tkinter) and a **web app / PWA** (Flask + React).
 
-## Requisitos
+## Features
 
-- Python 3.10 ou superior
-- Nenhuma dependencia externa
+- Search a show by name (TVMaze → IMDb id) or by IMDb id directly
+- Query the public **OpenSubtitles V3** endpoint used by Stremio (no API key needed)
+- **Season mode:** load every episode, pick the best subtitle for each one, and download them all in one go
+- **Automatic matching:** reads the video folder, figures out which file is `S01E03` and saves the subtitle as `Show.S01E03.srt` next to it. You can override the match manually.
+- **Android over ADB:** browse the phone's storage (including SD cards under `/storage/XXXX-XXXX`) and `adb push` subtitles straight to the device. MTP folders can't be opened from Python, so this goes through ADB instead.
+- Filters to Brazilian Portuguese by default, with an option to list all languages
+- The core library uses **only the Python standard library**
 
-## Interface grafica
+## Architecture
 
-```powershell
-python .\subtitle_downloader.py --gui
+```
+                 ┌──────────────────────────────────────────┐
+                 │        subtitle_app/  (shared core)      │
+                 │  providers · downloader · video_library  │
+                 │  adb_client · http_client (stdlib only)  │
+                 └───────▲──────────────▲──────────────▲────┘
+                         │              │              │
+                 ┌───────┴──┐   ┌───────┴──┐   ┌───────┴─────────────┐
+                 │   CLI    │   │ Tkinter  │   │ Flask REST API      │
+                 │          │   │   GUI    │   │ (layered: api /     │
+                 └──────────┘   └──────────┘   │ application/domain/ │
+                                               │ infrastructure)     │
+                                               └───────▲─────────────┘
+                                                       │ /api
+                                               ┌───────┴─────────────┐
+                                               │ React 19 + TS PWA   │
+                                               │ TanStack Query      │
+                                               └─────────────────────┘
 ```
 
-Fluxo recomendado:
+- **Backend:** Flask with a layered structure (routes → application services → domain → infrastructure adapters). Endpoints include `/shows`, `/shows/<id>/episodes`, `/subtitles/scan`, `/download/zip`, `/videos/scan` and `/android/*`.
+- **Frontend:** React 19 + TypeScript + Vite, with a data/domain/services split, TanStack Query and an installable **PWA** (manifest + service worker).
+- **Deploy:** Docker Compose for local development. In production it runs behind **Nginx + Gunicorn + systemd** on an Ubuntu VM (see [INSTRUCOES_NUVEM.md](INSTRUCOES_NUVEM.md)).
 
-1. digite a serie e clique em `Buscar`;
-2. selecione a serie correta;
-3. escolha `Local` ou `Android ADB`;
-4. selecione/digite a `Pasta dos videos` e clique em `Ler videos`;
-5. informe a temporada e clique em `Carregar temporada`;
-6. clique em `Buscar legendas`;
-7. revise as colunas `Selecionada` e `Video destino`;
-8. use `Escolher legenda` quando quiser trocar a legenda de um episodio;
-9. use `Arquivo destino` quando o casamento automatico escolher o arquivo errado;
-10. clique em `Baixar selecionados`.
+## Quick start
 
-Quando um episodio tem `Video destino`, a legenda e copiada para a mesma pasta do video com o mesmo nome-base:
+### Desktop GUI
 
-```text
-D:\Series\Nome da Serie\Season 01\
-  Nome.da.Serie.S01E01.mkv
-  Nome.da.Serie.S01E01.srt
+```bash
+python subtitle_downloader.py --gui
 ```
 
-Se um episodio nao tiver video associado, a legenda ainda e salva na estrutura padrao `downloads/Nome da Serie/Season XX/`.
+Search the show → choose `Local` or `Android ADB` → read the video folder → load the season → **Search subtitles** → review → **Download selected**.
 
-### Android via ADB
+### CLI
 
-Arquivos Android conectados por USB geralmente aparecem no Windows Explorer via MTP, nao como uma pasta normal. Bibliotecas Python/Tkinter nao conseguem navegar esse local do mesmo jeito que o Explorer. Para Android, use o modo `Android ADB`:
+```bash
+# interactive
+python subtitle_downloader.py
 
-1. instale Android Platform Tools;
-2. habilite `USB debugging` no Android;
-3. conecte o aparelho e aceite a autorizacao;
-4. no app, selecione `Android ADB`;
-5. clique em `Procurar` para navegar pelas pastas do Android via ADB;
-6. clique em `Ler videos`.
+# one episode, non-interactive
+python subtitle_downloader.py --series "Breaking Bad" --season 1 --episode 1 --first-show --first-subtitle
 
-O navegador Android começa com atalhos para `/sdcard`, `/storage/emulated/0` e tambem tenta mostrar cartoes/armazenamentos externos encontrados em `/storage`, como `/storage/XXXX-XXXX`.
-
-Voce ainda pode digitar uma pasta manualmente, por exemplo `/sdcard/Movies`, `/sdcard/Download` ou `/storage/XXXX-XXXX/Movies`.
-
-Se o app disser que `ADB nao encontrado`, adicione a pasta do Platform Tools ao `PATH` do Windows ou defina `ADB_PATH` com o caminho completo:
-
-```powershell
-$env:ADB_PATH="C:\platform-tools\adb.exe"
-python .\subtitle_downloader.py --gui
+# by IMDb id, all languages, custom output folder
+python subtitle_downloader.py --series tt0944947 --season 1 --episode 1 --all-languages --output-dir ./subs
 ```
 
-Quando baixar, a legenda e enviada com `adb push` para a mesma pasta do video:
+### Web app
 
-```text
-/sdcard/Movies/Show.S01E01.mkv
-/sdcard/Movies/Show.S01E01.srt
+```bash
+docker compose up --build
+# API:  http://localhost:7001/api   (Swagger at /docs)
+# Web:  http://localhost:7002
 ```
 
-## CLI interativo
+Or run it without Docker: `pip install -r backend/requirements.txt && python backend/app.py`, then `npm install && npm run dev` in `frontend/`.
 
-```powershell
-python .\subtitle_downloader.py
+### Android over ADB
+
+Install Android Platform Tools, enable USB debugging and connect the phone. If `adb` is not on your `PATH`, set `ADB_PATH` to its full path.
+
+## Project layout
+
+```
+subtitle_app/     # shared core: models, providers, matching, ADB, CLI, GUI
+backend/          # Flask API (api / application / domain / infrastructure / tests)
+frontend/         # React + TypeScript PWA
+docker-compose.yml
 ```
 
-O script vai perguntar:
+## Notes
 
-- serie ou IMDb id;
-- temporada;
-- episodio;
-- qual serie da lista voce quer;
-- qual legenda baixar.
-
-Por padrao ele filtra por `pob`, que e o codigo retornado pelo OpenSubtitles V3 para Portugues Brasil.
-
-## Uso direto
-
-```powershell
-python .\subtitle_downloader.py --series "Game of Thrones" --season 1 --episode 1
-```
-
-Selecionar automaticamente o primeiro resultado de serie e a primeira legenda:
-
-```powershell
-python .\subtitle_downloader.py --series "Game of Thrones" --season 1 --episode 1 --first-show --first-subtitle
-```
-
-Listar todos os idiomas:
-
-```powershell
-python .\subtitle_downloader.py --series "Game of Thrones" --season 1 --episode 1 --all-languages
-```
-
-Usar IMDb id direto, sem depender do TVMaze:
-
-```powershell
-python .\subtitle_downloader.py --series tt0944947 --season 1 --episode 1
-```
-
-Arquivos baixados ficam em `downloads/` por padrao. Para trocar:
-
-```powershell
-python .\subtitle_downloader.py --series "Breaking Bad" --season 1 --episode 1 --output-dir "C:\Legendas"
-```
-
-## Observacoes
-
-Esse endpoint V3 nao exige login nem API key, mas ele e um servico publico do ecossistema Stremio/OpenSubtitles. Para automacoes grandes, use fila, baixa concorrencia e cache local para evitar bloqueios temporarios.
-
-## Arquitetura
-
-- `subtitle_app/models.py`: dataclasses do dominio.
-- `subtitle_app/http_client.py`: chamadas HTTP sem dependencias externas.
-- `subtitle_app/providers.py`: clientes TVMaze e OpenSubtitles V3.
-- `subtitle_app/downloader.py`: regras de scan, escolha padrao e download.
-- `subtitle_app/video_library.py`: leitura da pasta de videos e casamento por episodio.
-- `subtitle_app/adb_client.py`: leitura e envio de arquivos Android via ADB.
-- `subtitle_app/cli.py`: interface de linha de comando.
-- `subtitle_app/gui.py`: interface grafica Tkinter.
-
-## Versao Web
-
-A versao web segue a organizacao descrita em `ARQUITETURA.md`:
-
-```text
-backend/
-  api/routes/
-  application/
-  domain/entities/
-  infrastructure/
-  static/
-  tests/
-frontend/
-  src/app/
-  src/components/
-  src/lib/data/
-  src/lib/domain/
-  src/lib/services/
-  src/routes/
-  src/styles/
-  src/types/
-```
-
-O pacote `subtitle_app/` continua sendo o core compartilhado pelo CLI, app Tkinter e backend Flask.
-
-### Rodar Backend
-
-```powershell
-cd C:\Repos\SubtitleDownloader\backend
-pip install -r requirements.txt
-python app.py
-```
-
-API: `http://127.0.0.1:5000/api`
-
-Docs: `http://127.0.0.1:5000/docs`
-
-### Rodar Frontend
-
-```powershell
-cd C:\Repos\SubtitleDownloader\frontend
-npm install
-npm run dev
-```
-
-Web app: `http://127.0.0.1:5173`
-
-Se usar outra URL de API:
-
-```powershell
-$env:VITE_API_LOCAL_BASE_URL="http://127.0.0.1:5000/api"
-npm run dev
-```
+The OpenSubtitles V3 endpoint is a public service. For bulk automation, use a queue, low concurrency and a local cache to avoid temporary blocks.
